@@ -1,0 +1,37 @@
+name: iOS Auto Build & Upload
+on: [push]
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen & Fastlane
+        run: |
+          brew install xcodegen
+          gem install fastlane -N
+      - name: Generate Xcode Project
+        run: xcodegen generate
+      - name: Build & Archive
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.TEAM_ID }}
+        run: |
+          xcodebuild -project BluebookHelper.xcodeproj \
+            -scheme BluebookHelper \
+            -configuration Release \
+            -archivePath build/BluebookHelper.xcarchive \
+            archive CODE_SIGN_IDENTITY="iPhone Distribution" \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            CODE_SIGN_STYLE="Manual"
+      - name: Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/BluebookHelper.xcarchive \
+            -exportPath build/ipa \
+            -exportOptionsPlist exportOptions.plist
+      - name: Upload to TestFlight
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        run: |
+          echo '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>app-store</string><key>teamID</key><string>${{ secrets.TEAM_ID }}</string></dict></plist>' > exportOptions.plist
+          fastlane upload_to_app_store skip_metadata:true skip_screenshots:true
